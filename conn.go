@@ -7,16 +7,20 @@ import (
 
 func DialArc(addr string) (*ArcConn, error) {
 	c := new(ArcConn)
-	c.remoteAddr, _ = NewArcAddr(addr)
+	c.remoteAddr = NewArcAddr().Set(addr)
 	c.socketTCP, _ = net.DialTCP("tcp", nil, c.remoteAddr.TCP)
 	c.socketUDP, _ = net.ListenUDP("udp", nil)
 
 	c.session, _ = createSession(c, 0)
 
+	c.chanAccepted = make(chan bool)
+
 	go c.loopTCPRead()
 	go c.loopUDPRead()
 
 	c.session.Make()
+
+	<- c.chanAccepted
 
 	return c, nil
 }
@@ -30,6 +34,8 @@ type ArcConn struct {
 	socketUDP *net.UDPConn
 
 	session *Session
+
+	chanAccepted chan bool
 }
 
 func (c *ArcConn) IsServer() bool {
@@ -47,7 +53,7 @@ func (c *ArcConn) loopTCPRead() {
 func (c *ArcConn) loopUDPRead() {
 	for {
 		buf := make([]byte, 1480)
-		size, _ := c.socketUDP.Read(buf)
+		size, _, _ := c.socketUDP.ReadFromUDP(buf)
 		c.inputUDP(buf[:size])
 	}
 }
@@ -82,7 +88,7 @@ func (c *ArcConn) handleSegment(b *[]byte) {
 		case TCP_SEGMENT_SESSION_RESPONSE:
 			c.handleSegmentResponseSession(s)
 		default:
-			c.session.HandleSessionSegment(b)
+			c.session.HandleSessionSegment(b, c.remoteAddr)
 		}
 	}
 }
@@ -95,5 +101,9 @@ func (c *ArcConn) handleSegmentNewSession(s *TCPSegmentSessionCommand) {
 
 func (c *ArcConn) handleSegmentResponseSession(s *TCPSegmentSessionCommand) {
 	c.session.Id = s.SessionId
-	c.session.Probe()
+	c.session.ProbeAsync()
+}
+
+func (c *ArcConn) DumpRemoteAddr() string {
+	return c.remoteAddr.String()
 }

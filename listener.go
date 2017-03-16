@@ -6,7 +6,7 @@ import (
 
 func ListenArc(addr string) (*ArcListener, error) {
 	l := new(ArcListener)
-	l.listenAddr, _ = NewArcAddr(addr)
+	l.listenAddr = NewArcAddr().Set(addr)
 	l.socketTCP, _ = net.ListenTCP("tcp", l.listenAddr.TCP)
 	l.socketUDP, _ = net.ListenUDP("udp", l.listenAddr.UDP)
 	l.sessionSet, _ = createSessionSet()
@@ -51,14 +51,14 @@ func (l *ArcListener) loopTCPAccept() {
 func (l *ArcListener) loopUDPRead() {
 	for {
 		buf := make([]byte, 1480)
-		size, _, _ := l.socketUDP.ReadFromUDP(buf)
-		l.inputUDP(buf[:size])
+		size, addr, _ := l.socketUDP.ReadFromUDP(buf)
+		l.inputUDP(buf[:size], NewArcAddr().ParseUDP(addr))
 	}
 }
 
 func (l *ArcListener) tcpAccept(conn *net.TCPConn) {
 	c := new(ArcConn)
-	c.remoteAddr, _ = ArcAddrParse(conn.RemoteAddr())
+	c.remoteAddr = NewArcAddr().ParseTCP(conn.RemoteAddr())
 	c.socketTCP = conn
 	c.socketUDP = c.socketUDP
 	c.listener = l
@@ -68,16 +68,16 @@ func (l *ArcListener) tcpAccept(conn *net.TCPConn) {
 	go c.loopTCPRead()
 }
 
-func (l *ArcListener) inputUDP(b []byte) {
-	l.handleUDPSegment(&b)
+func (l *ArcListener) inputUDP(b []byte, src *ArcAddr) {
+	l.handleUDPSegment(&b, src)
 }
 
-func (l *ArcListener) handleUDPSegment(b *[]byte) {
+func (l *ArcListener) handleUDPSegment(b *[]byte, src *ArcAddr) {
 	switch SegmentClass(ReadType(b)) {
 	case SEGMENT_CLASS_SESSION:
 		s, _ := ParseTCPSegmentSessionCommand(b)
 		session := l.sessionSet.Get(s.SessionId)
 		if session == nil { return }
-		session.HandleSessionSegment(b)
+		session.HandleSessionSegment(b, src)
 	}
 }

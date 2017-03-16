@@ -1,49 +1,64 @@
 package arc
 
 import (
-	"errors"
 	"net"
 )
 
-func NewArcAddr(s string) (*ArcAddr, error) {
-	a := new(ArcAddr)
-
-	udpAddr, err := net.ResolveUDPAddr("udp", s)
-	if err != nil {
-		return nil, err
-	}
-	a.UDP = udpAddr
-
-	tcpAddr, err := net.ResolveTCPAddr("tcp", s)
-	if err != nil {
-		return nil, err
-	}
-	a.TCP = tcpAddr
-
-	a.IP = a.TCP.IP
-	a.Port = a.TCP.Port
-
-	return a, nil
-}
-
-func ArcAddrParse(addr interface{}) (*ArcAddr, error) {
-	switch addr.(type) {
-	case net.UDPAddr, *net.UDPAddr:
-		return NewArcAddr(addr.(*net.UDPAddr).String())
-	case net.TCPAddr, *net.TCPAddr:
-		return NewArcAddr(addr.(*net.TCPAddr).String())
-	default:
-		return nil, errors.New("Unknown address type")
-	}
+func NewArcAddr() *ArcAddr {
+	return new(ArcAddr)
 }
 
 type ArcAddr struct {
 	UDP  *net.UDPAddr
 	TCP  *net.TCPAddr
-	IP   net.IP
-	Port int
+}
+
+func (a *ArcAddr) SetUDP(s string) {
+	udpAddr, _ := net.ResolveUDPAddr("udp", s)
+	a.UDP = udpAddr
+}
+
+func (a *ArcAddr) SetTCP(s string) {
+	tcpAddr, _ := net.ResolveTCPAddr("tcp", s)
+	a.TCP = tcpAddr
+}
+
+func (a *ArcAddr) Set(s string) *ArcAddr {
+	a.SetTCP(s)
+	a.SetUDP(s)
+	return a
+}
+
+func (a *ArcAddr) Parse(addr interface{}) *ArcAddr {
+	switch addr.(type) {
+	case net.UDPAddr, *net.UDPAddr:
+		a.Set(addr.(*net.UDPAddr).String())
+	case net.TCPAddr, *net.TCPAddr:
+		a.Set(addr.(*net.TCPAddr).String())
+	}
+	return a
+}
+
+func (a *ArcAddr) ParseTCP(addr interface{}) *ArcAddr {
+	switch addr.(type) {
+	case net.UDPAddr, *net.UDPAddr:
+		a.SetTCP(addr.(*net.UDPAddr).String())
+	case net.TCPAddr, *net.TCPAddr:
+		a.SetTCP(addr.(*net.TCPAddr).String())
+	}
+	return a
+}
+
+func (a *ArcAddr) ParseUDP(addr interface{}) *ArcAddr {
+	switch addr.(type) {
+	case net.UDPAddr, *net.UDPAddr:
+		a.SetUDP(addr.(*net.UDPAddr).String())
+	case net.TCPAddr, *net.TCPAddr:
+		a.SetUDP(addr.(*net.TCPAddr).String())
+	}
+	return a
 }
 
 func (a *ArcAddr) String() string {
-	return a.TCP.String()
+	return "TCP: " + a.TCP.String() + ", UDP: " + a.UDP.String()
 }
