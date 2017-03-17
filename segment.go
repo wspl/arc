@@ -1,7 +1,5 @@
 package arc
 
-const ARC_PROTOCOL_VERSION uint16 = 0x01
-
 const(
 	SEGMENT_CLASS_SESSION        uint16 = 0x1
 

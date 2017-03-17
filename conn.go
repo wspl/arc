@@ -15,8 +15,8 @@ func DialArc(addr string) (*ArcConn, error) {
 
 	c.chanAccepted = make(chan bool)
 
-	go c.loopTCPRead()
-	go c.loopUDPRead()
+	c.startLoopTCPRead()
+	c.startLoopUDPRead()
 
 	c.session.Make()
 
@@ -35,6 +35,9 @@ type ArcConn struct {
 
 	session *Session
 
+	enabledLoopTCPRead bool
+	enabledLoopUDPRead bool
+
 	chanAccepted chan bool
 }
 
@@ -44,18 +47,46 @@ func (c *ArcConn) IsServer() bool {
 
 func (c *ArcConn) loopTCPRead() {
 	reader := bufio.NewReader(c.socketTCP)
-	for {
-		line, _, _ := reader.ReadLine()
+	for c.enabledLoopTCPRead {
+		line, _, err := reader.ReadLine()
+		if err != nil {
+			if err.Error() == "EOF" {
+				// Client Error
+				c.session.RequestRestore()
+			} else {
+				// Server Error
+				c.stopLoopTCPRead()
+			}
+			break
+		}
 		c.inputTCP(line)
 	}
 }
 
+func (c *ArcConn) stopLoopTCPRead() {
+	c.enabledLoopTCPRead = false
+}
+
+func (c *ArcConn) startLoopTCPRead() {
+	c.enabledLoopTCPRead = true
+	go c.loopTCPRead()
+}
+
 func (c *ArcConn) loopUDPRead() {
-	for {
+	for c.enabledLoopUDPRead {
 		buf := make([]byte, 1480)
 		size, _, _ := c.socketUDP.ReadFromUDP(buf)
 		c.inputUDP(buf[:size])
 	}
+}
+
+func (c *ArcConn) stopLoopUDPRead() {
+	c.enabledLoopUDPRead = false
+}
+
+func (c *ArcConn) startLoopUDPRead() {
+	c.enabledLoopUDPRead = true
+	go c.loopUDPRead()
 }
 
 func (c *ArcConn) outputTCP(b []byte) {
@@ -94,9 +125,15 @@ func (c *ArcConn) handleSegment(b *[]byte) {
 }
 
 func (c *ArcConn) handleSegmentNewSession(s *TCPSegmentSessionCommand) {
-	_, session := c.listener.sessionSet.New(c)
-	session.Respond()
-	c.session = session
+	if s.SessionId == 0 {
+		_, session := c.listener.sessionSet.New(c)
+		session.Respond()
+		c.session = session
+	} else {
+		// Restore connection
+		session := c.listener.sessionSet.Get(s.SessionId)
+		session.Restore(c)
+	}
 }
 
 func (c *ArcConn) handleSegmentResponseSession(s *TCPSegmentSessionCommand) {

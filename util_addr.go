@@ -30,12 +30,8 @@ func (a *ArcAddr) Set(s string) *ArcAddr {
 }
 
 func (a *ArcAddr) Parse(addr interface{}) *ArcAddr {
-	switch addr.(type) {
-	case net.UDPAddr, *net.UDPAddr:
-		a.Set(addr.(*net.UDPAddr).String())
-	case net.TCPAddr, *net.TCPAddr:
-		a.Set(addr.(*net.TCPAddr).String())
-	}
+	a.ParseTCP(addr)
+	a.ParseUDP(addr)
 	return a
 }
 

@@ -2,6 +2,8 @@ package arc
 
 import (
 	"net"
+	"time"
+	"math/rand"
 )
 
 func ListenArc(addr string) (*ArcListener, error) {
@@ -14,6 +16,8 @@ func ListenArc(addr string) (*ArcListener, error) {
 	l.chanAcceptConn = make(chan *ArcConn)
 	l.chanAcceptConnError = make(chan error)
 
+	l.enabledLoopTCPAccept = true
+	l.enabledLoopUDPRead = true
 	go l.loopTCPAccept()
 	go l.loopUDPRead()
 
@@ -27,6 +31,9 @@ type ArcListener struct {
 	socketUDP *net.UDPConn
 
 	sessionSet *SessionSet
+
+	enabledLoopTCPAccept bool
+	enabledLoopUDPRead bool
 
 	chanAcceptConn      chan *ArcConn
 	chanAcceptConnError chan error
@@ -42,14 +49,14 @@ func (l *ArcListener) AcceptArc() (*ArcConn, error) {
 }
 
 func (l *ArcListener) loopTCPAccept() {
-	for {
+	for l.enabledLoopTCPAccept {
 		conn, _ := l.socketTCP.AcceptTCP()
 		l.tcpAccept(conn)
 	}
 }
 
 func (l *ArcListener) loopUDPRead() {
-	for {
+	for l.enabledLoopUDPRead {
 		buf := make([]byte, 1480)
 		size, addr, _ := l.socketUDP.ReadFromUDP(buf)
 		l.inputUDP(buf[:size], NewArcAddr().ParseUDP(addr))
@@ -65,7 +72,19 @@ func (l *ArcListener) tcpAccept(conn *net.TCPConn) {
 
 	c.session, _ = createSession(c, 0)
 
-	go c.loopTCPRead()
+	c.enabledLoopTCPRead = true
+	c.startLoopTCPRead()
+
+	if ARC_DEBUG_SIMULATION_MODE {
+		go func() {
+			// Automatic Close TCP Connection
+			for {
+				randSeconds := rand.Intn(5) + 5
+				time.Sleep(time.Duration(randSeconds) * time.Second)
+				c.socketTCP.Close()
+			}
+		}()
+	}
 }
 
 func (l *ArcListener) inputUDP(b []byte, src *ArcAddr) {
