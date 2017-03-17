@@ -30,7 +30,7 @@ func (s *Session) loopKeepAlive() {
 	for {
 		randSeconds := rand.Intn(25) + 30
 		if ARC_DEBUG_SIMULATION_MODE {
-			randSeconds = 5
+			randSeconds = 1
 		}
 		time.Sleep(time.Duration(randSeconds) * time.Second)
 		s.KeepAlive()
@@ -143,14 +143,15 @@ func (s *Session) KeepAlive() {
 }
 
 func (s *Session) Restore(new *ArcConn) {
-	new.stopLoopTCPRead()
+	new.taskTCPRead.Stop()
 	s.conn.socketTCP = new.socketTCP
-	s.conn.startLoopTCPRead()
+	s.conn.taskTCPRead.Start()
 }
 
 func (s *Session) RequestRestore() error {
+	println("start request restore")
 	var err error
-	s.conn.stopLoopTCPRead()
+	//s.conn.taskTCPRead.Stop()
 	s.conn.socketTCP, err = net.DialTCP("tcp", nil, s.conn.remoteAddr.TCP)
 	if err != nil {
 		return err
@@ -159,10 +160,10 @@ func (s *Session) RequestRestore() error {
 		Type: TCP_SEGMENT_SESSION_NEW,
 		SessionId: s.Id,
 	}
-	_, err = s.conn.socketTCP.Write(seg.Binary())
+	l, err := s.conn.socketTCP.Write(seg.Binary())
 	if err != nil {
 		return err
 	}
-	s.conn.startLoopTCPRead()
+	println("stop request restore:", l, err)
 	return nil
 }
